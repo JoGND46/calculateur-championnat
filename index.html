@@ -584,15 +584,6 @@
         
         <!-- Contenu Scratch -->
         <div id="scratch-content" class="tab-content active">
-            <div class="points-section">
-                <h3 style="text-align: center; margin-bottom: 15px; color: #000;">🏁 Barème de Points - Scratch</h3>
-                <div class="points-grid" id="scratch-points-grid"></div>
-                <div class="controls">
-                    <button class="btn btn-config" onclick="showTeamConfig('scratch')">⚙️ Configurer Équipes</button>
-                    <button class="btn btn-reset" onclick="confirmResetRace('scratch')">🔄 Reset Course</button>
-                </div>
-            </div>
-            
             <div class="teams-section">
                 <div class="teams-input">
                     <div class="section-header">🏎️ Saisie Positions - Scratch</div>
@@ -604,19 +595,19 @@
                     <div class="teams-container" id="scratch-standings-container"></div>
                 </div>
             </div>
+            
+            <div class="points-section">
+                <h3 style="text-align: center; margin-bottom: 15px; color: #000;">🏁 Barème de Points - Scratch</h3>
+                <div class="points-grid" id="scratch-points-grid"></div>
+                <div class="controls">
+                    <button class="btn btn-config" onclick="showTeamConfig('scratch')">⚙️ Configurer Équipes</button>
+                    <button class="btn btn-reset" onclick="confirmResetRace('scratch')">🔄 Reset Course</button>
+                </div>
+            </div>
         </div>
         
         <!-- Contenu Française -->
         <div id="francaise-content" class="tab-content">
-            <div class="points-section">
-                <h3 style="text-align: center; margin-bottom: 15px; color: #000;">🇫🇷 Barème de Points - À la Française</h3>
-                <div class="points-grid" id="francaise-points-grid"></div>
-                <div class="controls">
-                    <button class="btn btn-config" onclick="showTeamConfig('francaise')">⚙️ Configurer Équipes</button>
-                    <button class="btn btn-reset" onclick="confirmResetRace('francaise')">🔄 Reset Course</button>
-                </div>
-            </div>
-            
             <div class="teams-section">
                 <div class="teams-input">
                     <div class="section-header">🏎️ Saisie Positions - À la Française</div>
@@ -626,6 +617,15 @@
                 <div class="live-standings">
                     <div class="section-header">🏆 Classement Live - À la Française</div>
                     <div class="teams-container" id="francaise-standings-container"></div>
+                </div>
+            </div>
+            
+            <div class="points-section">
+                <h3 style="text-align: center; margin-bottom: 15px; color: #000;">🇫🇷 Barème de Points - À la Française</h3>
+                <div class="points-grid" id="francaise-points-grid"></div>
+                <div class="controls">
+                    <button class="btn btn-config" onclick="showTeamConfig('francaise')">⚙️ Configurer Équipes</button>
+                    <button class="btn btn-reset" onclick="confirmResetRace('francaise')">🔄 Reset Course</button>
                 </div>
             </div>
         </div>

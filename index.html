@@ -740,8 +740,17 @@
                 if (teamsError) throw teamsError;
                 
                 if (teams && teams.length > 0) {
-                    scratchTeams = teams.filter(t => t.category === 'scratch' || !t.category);
-                    francaiseTeams = teams.filter(t => t.category === 'francaise');
+                    // Adapter les noms de colonnes PostgreSQL (minuscules) vers JavaScript
+                    scratchTeams = teams.filter(t => t.category === 'scratch' || !t.category).map(team => ({
+                        ...team,
+                        currentPoints: team.currentpoints, // Conversion depuis PostgreSQL
+                        isOurTeam: team.isourteam         // Conversion depuis PostgreSQL
+                    }));
+                    francaiseTeams = teams.filter(t => t.category === 'francaise').map(team => ({
+                        ...team,
+                        currentPoints: team.currentpoints, // Conversion depuis PostgreSQL
+                        isOurTeam: team.isourteam         // Conversion depuis PostgreSQL
+                    }));
                 } else {
                     // Charger les données par défaut si aucune équipe
                     await initializeDefaultData();
@@ -852,8 +861,8 @@
                     const teamsWithCategory = teams.map(team => ({
                         number: team.number,
                         name: team.name,
-                        currentPoints: team.currentPoints,
-                        isOurTeam: team.isOurTeam,
+                        currentpoints: team.currentPoints, // Nom en minuscules pour PostgreSQL
+                        isourteam: team.isOurTeam,        // Nom en minuscules pour PostgreSQL
                         category: category
                     }));
                     

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Team SLT - Calculateur Championnat</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -63,6 +64,22 @@
             color: #059abb;
             font-size: 1em;
             margin-top: 5px;
+        }
+        
+        .status {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        
+        .status.connected {
+            color: #28a745;
+        }
+        
+        .status.disconnected {
+            color: #dc3545;
         }
         
         .container {
@@ -269,11 +286,6 @@
             box-shadow: 0 0 10px rgba(255,215,0,0.5);
         }
         
-        .position-select option {
-            padding: 5px;
-            text-align: center;
-        }
-        
         .standings-row {
             display: grid;
             grid-template-columns: 50px 1fr 60px 60px;
@@ -335,7 +347,7 @@
             color: white;
         }
         
-        /* Couleurs spéciales */
+        /* Couleurs spÃ©ciales */
         .rank-1 {
             background: linear-gradient(135deg, #FFD700, #FFA500) !important;
             color: #000 !important;
@@ -499,6 +511,27 @@
             font-size: 0.8em;
         }
         
+        .config-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .config-section h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .config-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
         @media (max-width: 768px) {
             .teams-section {
                 grid-template-columns: 1fr;
@@ -537,11 +570,20 @@
             <div>
                 <div class="title">TEAM SLT ENDURANCE</div>
                 <div class="subtitle">Calculateur Championnat Live</div>
+                <div id="connection-status" class="status disconnected">Configuration requise</div>
             </div>
         </div>
     </div>
     
     <div class="container">
+        <!-- Configuration Supabase -->
+        <div id="supabase-config" class="config-section">
+            <h4>Configuration Supabase</h4>
+            <input type="text" id="supabase-url" class="config-input" placeholder="URL Supabase (https://votre-projet.supabase.co)">
+            <input type="text" id="supabase-key" class="config-input" placeholder="Clé publique Supabase">
+            <button class="btn btn-config" onclick="connectSupabase()">Se connecter</button>
+        </div>
+        
         <!-- Onglets -->
         <div class="tabs">
             <button class="tab active" onclick="switchTab('scratch')">🏆 Classement Scratch</button>
@@ -561,7 +603,7 @@
             
             <div class="teams-section">
                 <div class="teams-input">
-                    <div class="section-header">🏍️ Saisie Positions - Scratch</div>
+                    <div class="section-header">🏎️ Saisie Positions - Scratch</div>
                     <div class="teams-container" id="scratch-teams-container"></div>
                 </div>
                 
@@ -585,7 +627,7 @@
             
             <div class="teams-section">
                 <div class="teams-input">
-                    <div class="section-header">🏍️ Saisie Positions - À la Française</div>
+                    <div class="section-header">🏎️ Saisie Positions - À la Française</div>
                     <div class="teams-container" id="francaise-teams-container"></div>
                 </div>
                 
@@ -623,14 +665,14 @@
     </div>
     
     <script>
-        // ========================================
-        // 🏆 CONFIGURATION DES ÉQUIPES CHAMPIONNAT
-        // ========================================
-        // Modifiez ces données selon vos équipes réelles
+        // Variables Supabase
+        let supabase = null;
+        let isConnected = false;
         
+        // Configuration par défaut
         const DEFAULT_TEAMS = [
             { number: 15, name: "Team SLT", currentPoints: 156, isOurTeam: true },
-            { number: 1,  currentPoints: 162, isOurTeam: false },
+            { number: 1, name: "Équipe 1", currentPoints: 162, isOurTeam: false },
             { number: 2, name: "Racing Pro", currentPoints: 145, isOurTeam: false },
             { number: 3, name: "Speed Demons", currentPoints: 140, isOurTeam: false },
             { number: 4, name: "Endurance Masters", currentPoints: 135, isOurTeam: false },
@@ -646,10 +688,7 @@
             { number: 14, name: "Moto Champions", currentPoints: 85, isOurTeam: false }
         ];
         
-        // ========================================
         // Variables de l'application
-        // ========================================
-        
         let scratchTeams = [];
         let francaiseTeams = [];
         let scratchRacePositions = {};
@@ -658,50 +697,249 @@
         let editingTeamIndex = -1;
         
         // Barèmes de points
-        const scratchPointsScale = [
-            30, 24, 21, 19, 17, 15, 14, 13, 12, 11,
-            10, 9, 8, 7, 6, 5, 4, 3, 2, 1
-        ];
+        const scratchPointsScale = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+        const francaisePointsScale = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
         
-        const francaisePointsScale = [
-            30, 24, 21, 19, 17, 15, 14, 13, 12, 11,
-            10, 9, 8, 7, 6, 5, 4, 3, 2, 1
-        ];
+        // Connexion à Supabase
+        async function connectSupabase() {
+            const url = document.getElementById('supabase-url').value.trim();
+            const key = document.getElementById('supabase-key').value.trim();
+            
+            if (!url || !key) {
+                alert('Veuillez remplir l\'URL et la clé Supabase');
+                return;
+            }
+            
+            try {
+                supabase = window.supabase.createClient(url, key);
+                
+                // Test de connexion
+                const { data, error } = await supabase.from('teams').select('count').limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                isConnected = true;
+                updateConnectionStatus('Connecté à Supabase', 'connected');
+                document.getElementById('supabase-config').style.display = 'none';
+                
+                // Sauvegarder la configuration
+                localStorage.setItem('supabase-url', url);
+                localStorage.setItem('supabase-key', key);
+                
+                // Charger les données
+                await loadDataFromSupabase();
+                
+                // Écouter les changements temps réel
+                setupRealtimeListeners();
+                
+            } catch (error) {
+                console.error('Erreur de connexion Supabase:', error);
+                alert('Erreur de connexion. Vérifiez vos paramètres.');
+                updateConnectionStatus('Erreur de connexion', 'disconnected');
+            }
+        }
+        
+        // Mettre à jour le statut de connexion
+        function updateConnectionStatus(message, type) {
+            const status = document.getElementById('connection-status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        // Charger les données depuis Supabase
+        async function loadDataFromSupabase() {
+            try {
+                // Charger les équipes
+                const { data: teams, error: teamsError } = await supabase
+                    .from('teams')
+                    .select('*');
+                
+                if (teamsError) throw teamsError;
+                
+                if (teams && teams.length > 0) {
+                    scratchTeams = teams.filter(t => t.category === 'scratch' || !t.category);
+                    francaiseTeams = teams.filter(t => t.category === 'francaise');
+                } else {
+                    // Charger les données par défaut si aucune équipe
+                    await initializeDefaultData();
+                }
+                
+                // Charger les positions de course
+                const { data: positions, error: positionsError } = await supabase
+                    .from('race_positions')
+                    .select('*');
+                
+                if (positionsError) throw positionsError;
+                
+                if (positions) {
+                    scratchRacePositions = {};
+                    francaiseRacePositions = {};
+                    
+                    positions.forEach(pos => {
+                        if (pos.category === 'scratch') {
+                            scratchRacePositions[pos.team_number] = pos.position;
+                        } else if (pos.category === 'francaise') {
+                            francaiseRacePositions[pos.team_number] = pos.position;
+                        }
+                    });
+                }
+                
+                updateDisplay('scratch');
+                updateDisplay('francaise');
+                
+            } catch (error) {
+                console.error('Erreur lors du chargement:', error);
+            }
+        }
+        
+        // Initialiser les données par défaut dans Supabase
+        async function initializeDefaultData() {
+            try {
+                const scratchData = DEFAULT_TEAMS.map(team => ({...team, category: 'scratch'}));
+                const francaiseData = DEFAULT_TEAMS.map(team => ({...team, category: 'francaise'}));
+                
+                const { error } = await supabase
+                    .from('teams')
+                    .insert([...scratchData, ...francaiseData]);
+                
+                if (error) throw error;
+                
+                scratchTeams = scratchData;
+                francaiseTeams = francaiseData;
+                
+            } catch (error) {
+                console.error('Erreur lors de l\'initialisation:', error);
+            }
+        }
+        
+        // Configurer les listeners temps réel
+        function setupRealtimeListeners() {
+            // Écouter les changements sur les équipes
+            supabase
+                .channel('teams-changes')
+                .on('postgres_changes', 
+                    { event: '*', schema: 'public', table: 'teams' },
+                    async (payload) => {
+                        console.log('Changement détecté:', payload);
+                        await loadDataFromSupabase();
+                    }
+                )
+                .subscribe();
+            
+            // Écouter les changements sur les positions
+            supabase
+                .channel('positions-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'race_positions' },
+                    async (payload) => {
+                        console.log('Position mise à jour:', payload);
+                        await loadDataFromSupabase();
+                    }
+                )
+                .subscribe();
+        }
+        
+        // Sauvegarder les équipes dans Supabase
+        async function saveTeamsToSupabase(category) {
+            if (!isConnected) return;
+            
+            try {
+                const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+                
+                // Supprimer les anciennes équipes de cette catégorie
+                await supabase
+                    .from('teams')
+                    .delete()
+                    .eq('category', category);
+                
+                // Insérer les nouvelles équipes
+                if (teams.length > 0) {
+                    const teamsWithCategory = teams.map(team => ({
+                        ...team,
+                        category: category
+                    }));
+                    
+                    const { error } = await supabase
+                        .from('teams')
+                        .insert(teamsWithCategory);
+                    
+                    if (error) throw error;
+                }
+                
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde:', error);
+                alert('Erreur lors de la sauvegarde des équipes');
+            }
+        }
+        
+        // Sauvegarder une position de course dans Supabase
+        async function savePositionToSupabase(category, teamNumber, position) {
+            if (!isConnected) return;
+            
+            try {
+                if (position === null || position === '') {
+                    // Supprimer la position
+                    await supabase
+                        .from('race_positions')
+                        .delete()
+                        .eq('category', category)
+                        .eq('team_number', teamNumber);
+                } else {
+                    // Insérer ou mettre à jour la position
+                    const { error } = await supabase
+                        .from('race_positions')
+                        .upsert({
+                            category: category,
+                            team_number: teamNumber,
+                            position: parseInt(position)
+                        });
+                    
+                    if (error) throw error;
+                }
+                
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde de position:', error);
+            }
+        }
         
         // Initialiser l'application
         function initializeApp() {
-            loadConfig();
+            // Charger la configuration Supabase sauvegardée
+            const savedUrl = localStorage.getItem('supabase-url');
+            const savedKey = localStorage.getItem('supabase-key');
+            
+            if (savedUrl && savedKey) {
+                document.getElementById('supabase-url').value = savedUrl;
+                document.getElementById('supabase-key').value = savedKey;
+                connectSupabase();
+            }
+            
             createPointsGrids();
+            loadFallbackConfig();
             updateDisplay('scratch');
             updateDisplay('francaise');
         }
         
-        // Charger la configuration
-        function loadConfig() {
+        // Charger la configuration de secours (localStorage)
+        function loadFallbackConfig() {
             const scratchSaved = localStorage.getItem('scratchTeamsConfig');
             const francaiseSaved = localStorage.getItem('francaiseTeamsConfig');
             
-            if (scratchSaved) {
-                scratchTeams = JSON.parse(scratchSaved);
-            } else {
-                // Si pas de sauvegarde, charger les équipes par défaut
-                scratchTeams = DEFAULT_TEAMS.map(team => ({...team}));
-                saveConfigToStorage();
+            if (!isConnected) {
+                if (scratchSaved) {
+                    scratchTeams = JSON.parse(scratchSaved);
+                } else {
+                    scratchTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                }
+                
+                if (francaiseSaved) {
+                    francaiseTeams = JSON.parse(francaiseSaved);
+                } else {
+                    francaiseTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                }
             }
-            
-            if (francaiseSaved) {
-                francaiseTeams = JSON.parse(francaiseSaved);
-            } else {
-                // Si pas de sauvegarde, charger les équipes par défaut
-                francaiseTeams = DEFAULT_TEAMS.map(team => ({...team}));
-                saveConfigToStorage();
-            }
-        }
-        
-        // Sauvegarder la configuration
-        function saveConfigToStorage() {
-            localStorage.setItem('scratchTeamsConfig', JSON.stringify(scratchTeams));
-            localStorage.setItem('francaiseTeamsConfig', JSON.stringify(francaiseTeams));
         }
         
         // Changer d'onglet
@@ -764,7 +1002,7 @@
         }
         
         // Ajouter une équipe
-        function addTeam() {
+        async function addTeam() {
             const number = parseInt(document.getElementById('team-number').value);
             const points = parseInt(document.getElementById('team-points').value) || 0;
             
@@ -819,6 +1057,9 @@
             document.getElementById('team-number').value = '';
             document.getElementById('team-points').value = '';
             
+            // Sauvegarder dans Supabase
+            await saveTeamsToSupabase(currentCategory);
+            
             updateTeamsConfigList();
         }
         
@@ -850,7 +1091,7 @@
         }
         
         // Supprimer une équipe
-        function removeTeam(index) {
+        async function removeTeam(index) {
             const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
             const racePositions = currentCategory === 'scratch' ? scratchRacePositions : francaiseRacePositions;
             
@@ -861,6 +1102,7 @@
                 // Supprimer la position de course
                 if (racePositions[teamNumber] !== undefined) {
                     delete racePositions[teamNumber];
+                    await savePositionToSupabase(currentCategory, teamNumber, null);
                 }
                 
                 // Supprimer l'équipe du tableau
@@ -873,7 +1115,9 @@
                     editingTeamIndex--;
                 }
                 
-                saveConfigToStorage();
+                // Sauvegarder dans Supabase
+                await saveTeamsToSupabase(currentCategory);
+                
                 updateTeamsConfigList();
                 updateDisplay(currentCategory);
             }
@@ -908,8 +1152,8 @@
             });
         }
         
-        // Charger des données d'exemple (remplace par les équipes par défaut)
-        function loadSampleData() {
+        // Charger des données d'exemple
+        async function loadSampleData() {
             if (confirm('Cela va remplacer toutes les équipes actuelles par les équipes par défaut. Continuer ?')) {
                 if (currentCategory === 'scratch') {
                     scratchTeams = DEFAULT_TEAMS.map(team => ({...team}));
@@ -917,33 +1161,36 @@
                     francaiseTeams = DEFAULT_TEAMS.map(team => ({...team}));
                 }
                 
+                await saveTeamsToSupabase(currentCategory);
                 updateTeamsConfigList();
             }
         }
         
         // Effacer toutes les équipes
-        function clearAllTeams() {
+        async function clearAllTeams() {
             if (currentCategory === 'scratch') {
                 scratchTeams.length = 0;
-                Object.keys(scratchRacePositions).forEach(key => {
+                Object.keys(scratchRacePositions).forEach(async key => {
                     delete scratchRacePositions[key];
+                    await savePositionToSupabase('scratch', key, null);
                 });
             } else {
                 francaiseTeams.length = 0;
-                Object.keys(francaiseRacePositions).forEach(key => {
+                Object.keys(francaiseRacePositions).forEach(async key => {
                     delete francaiseRacePositions[key];
+                    await savePositionToSupabase('francaise', key, null);
                 });
             }
             
             cancelEdit();
-            saveConfigToStorage();
+            await saveTeamsToSupabase(currentCategory);
             updateTeamsConfigList();
             updateDisplay(currentCategory);
         }
         
         // Sauvegarder la configuration
-        function saveConfig() {
-            saveConfigToStorage();
+        async function saveConfig() {
+            await saveTeamsToSupabase(currentCategory);
             updateDisplay(currentCategory);
             hideTeamConfig();
             alert('Configuration sauvegardée !');
@@ -1012,14 +1259,19 @@
         }
         
         // Mettre à jour la position de course
-        function updateRacePosition(category, teamNumber, position) {
+        async function updateRacePosition(category, teamNumber, position) {
             const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
             
             if (position && position !== '') {
                 racePositions[teamNumber] = parseInt(position);
             } else {
                 delete racePositions[teamNumber];
+                position = null;
             }
+            
+            // Sauvegarder dans Supabase
+            await savePositionToSupabase(category, teamNumber, position);
+            
             updateLiveStandings(category);
         }
         
@@ -1094,9 +1346,9 @@
         // Calculer l'évolution
         function calculateEvolution(initialPos, currentPos) {
             if (initialPos > currentPos) {
-                return `↑${initialPos - currentPos}`;
+                return `↗${initialPos - currentPos}`;
             } else if (initialPos < currentPos) {
-                return `↓${currentPos - initialPos}`;
+                return `↘${currentPos - initialPos}`;
             } else {
                 return '=';
             }
@@ -1112,26 +1364,20 @@
         
         // Obtenir la classe d'évolution
         function getEvolutionClass(evolution) {
-            if (evolution.startsWith('↑')) return 'evolution-up';
-            if (evolution.startsWith('↓')) return 'evolution-down';
+            if (evolution.startsWith('↗')) return 'evolution-up';
+            if (evolution.startsWith('↘')) return 'evolution-down';
             return 'evolution-same';
         }
         
         // Reset de la course
-        function resetRace(category) {
-            if (!category) {
-                category = currentCategory;
-            }
+        async function resetRace(category) {
+            const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
             
             // Reset des positions
-            if (category === 'scratch') {
-                Object.keys(scratchRacePositions).forEach(key => {
-                    delete scratchRacePositions[key];
-                });
-            } else {
-                Object.keys(francaiseRacePositions).forEach(key => {
-                    delete francaiseRacePositions[key];
-                });
+            const teamNumbers = Object.keys(racePositions);
+            for (const teamNumber of teamNumbers) {
+                delete racePositions[teamNumber];
+                await savePositionToSupabase(category, teamNumber, null);
             }
             
             // Reset des selects

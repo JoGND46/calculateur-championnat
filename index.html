@@ -740,16 +740,22 @@
                 if (teamsError) throw teamsError;
                 
                 if (teams && teams.length > 0) {
-                    // Adapter les noms de colonnes PostgreSQL (minuscules) vers JavaScript
+                    // Adapter les noms de colonnes PostgreSQL vers JavaScript
                     scratchTeams = teams.filter(t => t.category === 'scratch' || !t.category).map(team => ({
-                        ...team,
-                        currentPoints: team.currentpoints, // Conversion depuis PostgreSQL
-                        isOurTeam: team.isourteam         // Conversion depuis PostgreSQL
+                        id: team.id,
+                        number: team.number,
+                        name: team.name,
+                        currentPoints: team.currentpoints || 0, // Conversion depuis PostgreSQL
+                        isOurTeam: team.isourteam || false,     // Conversion depuis PostgreSQL
+                        category: team.category
                     }));
                     francaiseTeams = teams.filter(t => t.category === 'francaise').map(team => ({
-                        ...team,
-                        currentPoints: team.currentpoints, // Conversion depuis PostgreSQL
-                        isOurTeam: team.isourteam         // Conversion depuis PostgreSQL
+                        id: team.id,
+                        number: team.number,
+                        name: team.name,
+                        currentPoints: team.currentpoints || 0, // Conversion depuis PostgreSQL
+                        isOurTeam: team.isourteam || false,     // Conversion depuis PostgreSQL
+                        category: team.category
                     }));
                 } else {
                     // Charger les données par défaut si aucune équipe

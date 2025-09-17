@@ -700,7 +700,7 @@
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
                 // Test de connexion
-                const { data, error } = await supabase.from('équipes').select('count').limit(1);
+                const { data, error } = await supabase.from('teams').select('count').limit(1);
                 
                 if (error) {
                     throw error;
@@ -734,7 +734,7 @@
             try {
                 // Charger les équipes
                 const { data: teams, error: teamsError } = await supabase
-                    .from('équipes')  // Nom français de la table
+                    .from('teams')
                     .select('*');
                 
                 if (teamsError) throw teamsError;
@@ -850,7 +850,7 @@
                 // Supprimer les anciennes équipes de cette catégorie
                 console.log('Suppression des anciennes équipes...');
                 const deleteResult = await supabase
-                    .from('équipes')  // Nom français de la table
+                    .from('teams')
                     .delete()
                     .eq('catégorie', category);
                 
@@ -868,7 +868,7 @@
                     console.log('Données à insérer:', teamsWithCategory);
                     
                     const insertResult = await supabase
-                        .from('équipes')  // Nom français de la table
+                        .from('teams')
                         .insert(teamsWithCategory);
                     
                     console.log('Résultat insertion:', insertResult);

@@ -575,15 +575,7 @@
         </div>
     </div>
     
-    <div class="container">
-        <!-- Configuration Supabase -->
-        <div id="supabase-config" class="config-section">
-            <h4>Configuration Supabase</h4>
-            <input type="text" id="supabase-url" class="config-input" placeholder="URL Supabase (https://votre-projet.supabase.co)">
-            <input type="text" id="supabase-key" class="config-input" placeholder="Clé publique Supabase">
-            <button class="btn btn-config" onclick="connectSupabase()">Se connecter</button>
-        </div>
-        
+    <div class="container">        
         <!-- Onglets -->
         <div class="tabs">
             <button class="tab active" onclick="switchTab('scratch')">🏆 Classement Scratch</button>
@@ -665,7 +657,9 @@
     </div>
     
     <script>
-        // Variables Supabase
+        // Variables Supabase - Configuration automatique
+        const SUPABASE_URL = 'https://docxadnjpawkpcmdesra.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvY3hhZG5qcGF3a3BjbWRlc3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxMjkyMzEsImV4cCI6MjA3MzcwNTIzMX0.bsI9rALIMR3mMg_uF_jQwPha4syVJ7JOt7LmZ4Ox9e8';
         let supabase = null;
         let isConnected = false;
         
@@ -700,18 +694,10 @@
         const scratchPointsScale = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
         const francaisePointsScale = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
         
-        // Connexion à Supabase
-        async function connectSupabase() {
-            const url = document.getElementById('supabase-url').value.trim();
-            const key = document.getElementById('supabase-key').value.trim();
-            
-            if (!url || !key) {
-                alert('Veuillez remplir l\'URL et la clé Supabase');
-                return;
-            }
-            
+        // Connexion automatique à Supabase
+        async function initializeSupabase() {
             try {
-                supabase = window.supabase.createClient(url, key);
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
                 // Test de connexion
                 const { data, error } = await supabase.from('teams').select('count').limit(1);
@@ -722,11 +708,6 @@
                 
                 isConnected = true;
                 updateConnectionStatus('Connecté à Supabase', 'connected');
-                document.getElementById('supabase-config').style.display = 'none';
-                
-                // Sauvegarder la configuration
-                localStorage.setItem('supabase-url', url);
-                localStorage.setItem('supabase-key', key);
                 
                 // Charger les données
                 await loadDataFromSupabase();
@@ -736,8 +717,8 @@
                 
             } catch (error) {
                 console.error('Erreur de connexion Supabase:', error);
-                alert('Erreur de connexion. Vérifiez vos paramètres.');
-                updateConnectionStatus('Erreur de connexion', 'disconnected');
+                updateConnectionStatus('Mode hors ligne (localStorage)', 'disconnected');
+                loadFallbackConfig();
             }
         }
         
@@ -906,20 +887,13 @@
         
         // Initialiser l'application
         function initializeApp() {
-            // Charger la configuration Supabase sauvegardée
-            const savedUrl = localStorage.getItem('supabase-url');
-            const savedKey = localStorage.getItem('supabase-key');
-            
-            if (savedUrl && savedKey) {
-                document.getElementById('supabase-url').value = savedUrl;
-                document.getElementById('supabase-key').value = savedKey;
-                connectSupabase();
-            }
-            
             createPointsGrids();
             loadFallbackConfig();
             updateDisplay('scratch');
             updateDisplay('francaise');
+            
+            // Connexion automatique à Supabase
+            initializeSupabase();
         }
         
         // Charger la configuration de secours (localStorage)

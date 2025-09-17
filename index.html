@@ -700,7 +700,7 @@
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
                 // Test de connexion
-                const { data, error } = await supabase.from('teams').select('count').limit(1);
+                const { data, error } = await supabase.from('équipes').select('count').limit(1);
                 
                 if (error) {
                     throw error;
@@ -734,7 +734,7 @@
             try {
                 // Charger les équipes
                 const { data: teams, error: teamsError } = await supabase
-                    .from('teams')
+                    .from('équipes')  // Nom français de la table
                     .select('*');
                 
                 if (teamsError) throw teamsError;
@@ -850,26 +850,25 @@
                 // Supprimer les anciennes équipes de cette catégorie
                 console.log('Suppression des anciennes équipes...');
                 const deleteResult = await supabase
-                    .from('teams')
+                    .from('équipes')  // Nom français de la table
                     .delete()
-                    .eq('category', category);
+                    .eq('catégorie', category);
                 
                 console.log('Résultat suppression:', deleteResult);
                 
                 // Insérer les nouvelles équipes
                 if (teams.length > 0) {
                     const teamsWithCategory = teams.map(team => ({
-                        number: team.number,
-                        name: team.name,
-                        currentpoints: team.currentPoints, // Nom en minuscules pour PostgreSQL
-                        isourteam: team.isOurTeam,        // Nom en minuscules pour PostgreSQL
-                        category: category
+                        "Nombre": team.number,     // Nom français de la colonne
+                        "Nom": team.name,          // Nom français de la colonne
+                        "points": team.currentPoints, // Nom français de la colonne
+                        "catégorie": category      // Nom français de la colonne
                     }));
                     
                     console.log('Données à insérer:', teamsWithCategory);
                     
                     const insertResult = await supabase
-                        .from('teams')
+                        .from('équipes')  // Nom français de la table
                         .insert(teamsWithCategory);
                     
                     console.log('Résultat insertion:', insertResult);

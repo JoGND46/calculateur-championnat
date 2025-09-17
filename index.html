@@ -852,17 +852,18 @@
                 const deleteResult = await supabase
                     .from('teams')
                     .delete()
-                    .eq('catégorie', category);
+                    .eq('category', category);
                 
                 console.log('Résultat suppression:', deleteResult);
                 
                 // Insérer les nouvelles équipes
                 if (teams.length > 0) {
                     const teamsWithCategory = teams.map(team => ({
-                        "Nombre": team.number,     // Nom français de la colonne
-                        "Nom": team.name,          // Nom français de la colonne
-                        "points": team.currentPoints, // Nom français de la colonne
-                        "catégorie": category      // Nom français de la colonne
+                        number: team.number,
+                        name: team.name,
+                        currentpoints: team.currentPoints,
+                        isourteam: team.isOurTeam,
+                        category: category
                     }));
                     
                     console.log('Données à insérer:', teamsWithCategory);

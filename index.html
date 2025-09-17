@@ -824,34 +824,57 @@
         
         // Sauvegarder les équipes dans Supabase
         async function saveTeamsToSupabase(category) {
-            if (!isConnected) return;
+            console.log('Tentative de sauvegarde pour:', category);
+            console.log('isConnected:', isConnected);
+            
+            if (!isConnected) {
+                console.log('Pas connecté à Supabase, sauvegarde locale uniquement');
+                // Sauvegarder en local comme fallback
+                localStorage.setItem(category + 'TeamsConfig', JSON.stringify(category === 'scratch' ? scratchTeams : francaiseTeams));
+                return;
+            }
             
             try {
                 const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+                console.log('Équipes à sauvegarder:', teams);
                 
                 // Supprimer les anciennes équipes de cette catégorie
-                await supabase
+                console.log('Suppression des anciennes équipes...');
+                const deleteResult = await supabase
                     .from('teams')
                     .delete()
                     .eq('category', category);
                 
+                console.log('Résultat suppression:', deleteResult);
+                
                 // Insérer les nouvelles équipes
                 if (teams.length > 0) {
                     const teamsWithCategory = teams.map(team => ({
-                        ...team,
+                        number: team.number,
+                        name: team.name,
+                        currentPoints: team.currentPoints,
+                        isOurTeam: team.isOurTeam,
                         category: category
                     }));
                     
-                    const { error } = await supabase
+                    console.log('Données à insérer:', teamsWithCategory);
+                    
+                    const insertResult = await supabase
                         .from('teams')
                         .insert(teamsWithCategory);
                     
-                    if (error) throw error;
+                    console.log('Résultat insertion:', insertResult);
+                    
+                    if (insertResult.error) {
+                        throw insertResult.error;
+                    }
                 }
                 
+                console.log('Sauvegarde réussie');
+                
             } catch (error) {
-                console.error('Erreur lors de la sauvegarde:', error);
-                alert('Erreur lors de la sauvegarde des équipes');
+                console.error('Erreur détaillée lors de la sauvegarde:', error);
+                alert('Erreur lors de la sauvegarde des équipes: ' + error.message);
             }
         }
         

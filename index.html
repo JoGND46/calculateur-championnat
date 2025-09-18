@@ -561,9 +561,11 @@
             </div>
             
             <div class="save-section">
-                <h3>Sauvegarde</h3>
+                <h3>Sauvegarde & Rafraîchissement</h3>
                 <p>Les modifications sont automatiquement sauvegardées en temps réel</p>
                 <button class="save-btn" onclick="forceSave()">💾 Sauvegarder Maintenant</button>
+                <br><br>
+                <button class="config-btn" onclick="manualRefresh()">🔄 Rafraîchir les Données</button>
             </div>
         </div>
     </div>
@@ -1085,12 +1087,24 @@
             }
         }
         
-        // Rafraîchissement automatique toutes les minutes
+        // Rafraîchissement automatique toutes les minutes (seulement si on n'est pas en admin)
         function startAutoRefresh() {
             setInterval(async () => {
-                console.log('Rafraîchissement automatique des données...');
-                await loadData();
+                // Ne pas rafraîchir automatiquement si on est en mode admin
+                if (document.getElementById('admin-page').style.display === 'none') {
+                    console.log('Rafraîchissement automatique des données...');
+                    await loadData();
+                } else {
+                    console.log('Rafraîchissement automatique ignoré (mode admin actif)');
+                }
             }, 60000); // 60 secondes = 1 minute
+        }
+        
+        // Fonction pour rafraîchir manuellement
+        window.manualRefresh = async function() {
+            console.log('Rafraîchissement manuel des données...');
+            await loadData();
+            alert('Données rafraîchies !');
         }
         
         // Initialiser

@@ -603,19 +603,183 @@
             currentCategory = category;
         }
         
-        // Système de verrouillage
-        async function toggleLock() {
+        // Rendre les fonctions accessibles globalement
+        window.toggleLock = async function() {
+            console.log('toggleLock appelé, isLocked:', isLocked);
+            
             if (isLocked) {
-                const code = prompt('Code de déverrouillage :');
+                // Utiliser une méthode alternative si prompt() est bloqué
+                let code;
+                try {
+                    code = prompt('Code de déverrouillage :');
+                    console.log('Code entré:', code);
+                } catch (error) {
+                    console.error('Erreur prompt:', error);
+                    // Alternative : utiliser une div modale simple
+                    code = window.confirm('Popup bloquée. Cliquez OK si vous avez le code 142693, Annuler sinon') ? '142693' : null;
+                }
+                
                 if (code !== '142693') {
                     alert('Code incorrect !');
                     return;
                 }
+                console.log('Code correct, déverrouillage...');
             }
             
             isLocked = !isLocked;
+            console.log('Nouvel état isLocked:', isLocked);
+            
             await saveLockState();
             updateLockUI();
+        }
+        
+        window.switchTab = function(category) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(category + '-content').classList.add('active');
+            currentCategory = category;
+        }
+        
+        window.updatePosition = async function(category, teamNumber, position) {
+            if (isLocked) return;
+            
+            const positions = category === 'scratch' ? scratchPositions : francaisePositions;
+            
+            if (position && position !== '') {
+                positions[teamNumber] = parseInt(position);
+            } else {
+                delete positions[teamNumber];
+                position = null;
+            }
+            
+            if (isConnected) {
+                try {
+                    if (position === null) {
+                        await supabase
+                            .from('race_positions')
+                            .delete()
+                            .eq('category', category)
+                            .eq('team_number', teamNumber);
+                    } else {
+                        await supabase
+                            .from('race_positions')
+                            .upsert({
+                                category: category,
+                                team_number: teamNumber,
+                                position: parseInt(position)
+                            });
+                    }
+                } catch (error) {
+                    console.error('Erreur sauvegarde position:', error);
+                }
+            }
+            
+            updateLiveStandings(category);
+        }
+        
+        window.showConfig = function(category) {
+            if (isLocked) {
+                alert('Page verrouillée. Déverrouillez d\'abord.');
+                return;
+            }
+            currentCategory = category;
+            document.getElementById('config-modal').style.display = 'block';
+            updateTeamsList();
+        }
+        
+        window.hideConfig = function() {
+            document.getElementById('config-modal').style.display = 'none';
+        }
+        
+        window.addTeam = async function() {
+            const number = parseInt(document.getElementById('team-number').value);
+            const points = parseInt(document.getElementById('team-points').value) || 0;
+            
+            if (!number) {
+                alert('Veuillez entrer un numéro d\'équipe');
+                return;
+            }
+            
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            
+            if (teams.find(t => t.number === number)) {
+                alert('Ce numéro d\'équipe existe déjà');
+                return;
+            }
+            
+            const isOurTeam = number === 15;
+            const team = {
+                number: number,
+                name: isOurTeam ? "Team SLT" : `Équipe ${number}`,
+                currentPoints: points,
+                isOurTeam: isOurTeam
+            };
+            
+            teams.push(team);
+            
+            if (isConnected) {
+                try {
+                    await supabase.from('teams').insert({
+                        number: number,
+                        name: team.name,
+                        currentpoints: points,
+                        isourteam: isOurTeam,
+                        category: currentCategory
+                    });
+                } catch (error) {
+                    console.error('Erreur sauvegarde équipe:', error);
+                }
+            }
+            
+            document.getElementById('team-number').value = '';
+            document.getElementById('team-points').value = '';
+            updateTeamsList();
+            updateDisplay();
+        }
+        
+        window.removeTeam = async function(index) {
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            const team = teams[index];
+            
+            if (confirm(`Supprimer l'équipe #${team.number} ${team.name} ?`)) {
+                teams.splice(index, 1);
+                
+                if (isConnected && team.id) {
+                    try {
+                        await supabase.from('teams').delete().eq('id', team.id);
+                    } catch (error) {
+                        console.error('Erreur suppression équipe:', error);
+                    }
+                }
+                
+                updateTeamsList();
+                updateDisplay();
+            }
+        }
+        
+        window.resetRace = async function(category) {
+            if (isLocked) {
+                alert('Page verrouillée. Déverrouillez d\'abord.');
+                return;
+            }
+            
+            if (confirm(`Remettre à zéro toutes les positions ${category === 'scratch' ? 'Scratch' : 'À la Française'} ?`)) {
+                const positions = category === 'scratch' ? scratchPositions : francaisePositions;
+                
+                Object.keys(positions).forEach(key => delete positions[key]);
+                
+                if (isConnected) {
+                    try {
+                        await supabase.from('race_positions').delete().eq('category', category);
+                    } catch (error) {
+                        console.error('Erreur reset positions:', error);
+                    }
+                }
+                
+                updateDisplay();
+            }
         }
         
         function updateLockUI() {

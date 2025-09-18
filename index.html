@@ -650,14 +650,21 @@
         };
         
         window.updatePosition = async function(category, teamNumber, position) {
+            console.log(`Mise à jour position: catégorie=${category}, équipe=${teamNumber}, position=${position}`);
+            
             const positions = category === 'scratch' ? scratchPositions : francaisePositions;
             
             if (position && position !== '') {
                 positions[teamNumber] = parseInt(position);
+                console.log(`Position sauvegardée localement: ${teamNumber} = ${positions[teamNumber]}`);
             } else {
                 delete positions[teamNumber];
                 position = null;
+                console.log(`Position supprimée localement pour équipe ${teamNumber}`);
             }
+            
+            // Afficher l'état actuel des positions
+            console.log(`État des positions ${category}:`, positions);
             
             await savePositionToSupabase(category, teamNumber, position);
             updateStandings();
@@ -790,9 +797,14 @@
         async function loadData() {
             if (!isConnected) return;
             
+            console.log('Chargement des données depuis Supabase...');
+            
             try {
                 const { data: teams } = await supabase.from('teams').select('*');
                 const { data: positions } = await supabase.from('race_positions').select('*');
+                
+                console.log('Équipes récupérées:', teams);
+                console.log('Positions récupérées:', positions);
                 
                 if (teams) {
                     scratchTeams = teams.filter(t => t.category === 'scratch').map(t => ({
@@ -810,6 +822,9 @@
                         currentPoints: t.currentpoints || 0,
                         isOurTeam: t.isourteam || false
                     }));
+                    
+                    console.log('Équipes Scratch:', scratchTeams.length);
+                    console.log('Équipes Française:', francaiseTeams.length);
                 }
                 
                 if (positions) {
@@ -819,10 +834,13 @@
                     positions.forEach(p => {
                         if (p.category === 'scratch') {
                             scratchPositions[p.team_number] = p.position;
-                        } else {
+                        } else if (p.category === 'francaise') {
                             francaisePositions[p.team_number] = p.position;
                         }
                     });
+                    
+                    console.log('Positions Scratch chargées:', scratchPositions);
+                    console.log('Positions Française chargées:', francaisePositions);
                 }
                 
                 updateStandings();
@@ -996,26 +1014,46 @@
         }
         
         async function savePositionToSupabase(category, teamNumber, position) {
-            if (!isConnected) return;
+            if (!isConnected) {
+                console.log('Pas de connexion Supabase - sauvegarde ignorée');
+                return;
+            }
+            
+            console.log(`Tentative de sauvegarde vers Supabase: catégorie=${category}, équipe=${teamNumber}, position=${position}`);
             
             try {
-                if (position === null) {
-                    await supabase
+                if (position === null || position === '') {
+                    console.log('Suppression de la position en base...');
+                    const { data, error } = await supabase
                         .from('race_positions')
                         .delete()
                         .eq('category', category)
                         .eq('team_number', teamNumber);
+                    
+                    if (error) {
+                        console.error('Erreur suppression position:', error);
+                        throw error;
+                    }
+                    console.log('Position supprimée avec succès:', data);
                 } else {
-                    await supabase
+                    console.log('Sauvegarde/mise à jour de la position en base...');
+                    const { data, error } = await supabase
                         .from('race_positions')
                         .upsert({
                             category: category,
                             team_number: teamNumber,
                             position: parseInt(position)
                         });
+                    
+                    if (error) {
+                        console.error('Erreur upsert position:', error);
+                        throw error;
+                    }
+                    console.log('Position sauvegardée avec succès:', data);
                 }
             } catch (error) {
-                console.error('Erreur sauvegarde position:', error);
+                console.error('Erreur sauvegarde position vers Supabase:', error);
+                alert('Erreur lors de la sauvegarde. Vérifiez la console pour plus de détails.');
             }
         }
         

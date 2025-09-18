@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team SLT - Calculateur Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Fonctions</h1>
+    <button onclick="testToggle()">Test Verrou</button>
+    <button onclick="testTab()">Test Onglet</button>
+    <div id="message"></div>
+
+    <script>
+        // Test simple
+        window.testToggle = function() {
+            document.getElementById('message').innerHTML = 'Fonction toggle fonctionne !';
+            let code = prompt('Code test (tapez 142693) :');
+            if (code === '142693') {
+                alert('Code correct !');
+            } else {
+                alert('Code incorrect !');
+            }
+        };
+
+        window.testTab = function() {
+            document.getElementById('message').innerHTML = 'Fonction tab fonctionne !';
+        };
+
+        console.log('Script chargé, fonctions disponibles');
+    </script>
+</body>
+</html>

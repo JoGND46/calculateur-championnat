@@ -483,7 +483,7 @@
             <!-- Onglets -->
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('scratch')">🏆 Classement Scratch</button>
-                <button class="tab" onclick="switchTab('francaise')">🇫🇷 Classement à la Française</button>
+                <button class="tab" onclick="switchTab('francaise')">🇫🇷 Classement À la Française</button>
             </div>
             
             <!-- Contenu Scratch -->
@@ -506,7 +506,7 @@
             <div class="admin-control">
                 <h3>Zone Administration</h3>
                 <p style="margin: 10px 0;">Configuration réservée aux administrateurs</p>
-                <button class="admin-btn" onclick="showAdminLogin()">🔐 Configuration</button>
+                <button class="admin-btn" onclick="showAdminLogin()">🔧 Configuration</button>
             </div>
         </div>
         
@@ -526,7 +526,7 @@
             <div id="admin-scratch-content" class="tab-content active">
                 <div class="admin-section">
                     <div class="team-input-section">
-                        <div class="section-header">🏍️ Saisie Positions - Scratch</div>
+                        <div class="section-header">🏎️ Saisie Positions - Scratch</div>
                         <div class="team-input-content" id="admin-scratch-teams"></div>
                     </div>
                     
@@ -545,7 +545,7 @@
             <div id="admin-francaise-content" class="tab-content">
                 <div class="admin-section">
                     <div class="team-input-section">
-                        <div class="section-header">🏍️ Saisie Positions - À la Française</div>
+                        <div class="section-header">🏎️ Saisie Positions - À la Française</div>
                         <div class="team-input-content" id="admin-francaise-teams"></div>
                     </div>
                     
@@ -572,7 +572,7 @@
     <div id="config-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>⚙️ Configuration des Équipes</h3>
+                <h3>⚙️ Configuration des Équipes - <span id="config-category-title">Scratch</span></h3>
                 <span class="close" onclick="hideTeamConfig()">&times;</span>
             </div>
             <div class="modal-body">
@@ -610,12 +610,29 @@
         
         // FONCTIONS GLOBALES
         window.switchTab = function(category) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            // Onglets publics
+            const publicTabs = document.querySelectorAll('#public-page .tab');
+            const publicContents = document.querySelectorAll('#public-page .tab-content');
+            
+            publicTabs.forEach(t => t.classList.remove('active'));
+            publicContents.forEach(c => c.classList.remove('active'));
             
             event.target.classList.add('active');
             document.getElementById(category + '-content').classList.add('active');
             currentCategory = category;
+        };
+        
+        window.switchAdminTab = function(category) {
+            // Onglets administrateur
+            const adminTabs = document.querySelectorAll('#admin-page .tab');
+            const adminContents = document.querySelectorAll('#admin-page .tab-content');
+            
+            adminTabs.forEach(t => t.classList.remove('active'));
+            adminContents.forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('admin-' + category + '-content').classList.add('active');
+            adminCategory = category;
         };
         
         window.showAdminLogin = function() {
@@ -632,12 +649,6 @@
             document.getElementById('admin-page').style.display = 'none';
         };
         
-        window.switchAdminCategory = function() {
-            adminCategory = document.getElementById('admin-category-select').value;
-            document.getElementById('admin-category').textContent = adminCategory === 'scratch' ? 'Scratch' : 'À la Française';
-            updateAdminTeams();
-        };
-        
         window.updatePosition = async function(category, teamNumber, position) {
             const positions = category === 'scratch' ? scratchPositions : francaisePositions;
             
@@ -652,7 +663,9 @@
             updateStandings();
         };
         
-        window.showTeamConfig = function() {
+        window.showTeamConfig = function(category) {
+            adminCategory = category;
+            document.getElementById('config-category-title').textContent = category === 'scratch' ? 'Scratch' : 'À la Française';
             document.getElementById('config-modal').style.display = 'block';
             updateTeamsList();
         };
@@ -714,9 +727,9 @@
             }
         };
         
-        window.resetPositions = function() {
-            if (confirm(`Remettre à zéro toutes les positions ${adminCategory === 'scratch' ? 'Scratch' : 'À la Française'} ?`)) {
-                const positions = adminCategory === 'scratch' ? scratchPositions : francaisePositions;
+        window.resetPositions = function(category) {
+            if (confirm(`Remettre à zéro toutes les positions ${category === 'scratch' ? 'Scratch' : 'À la Française'} ?`)) {
+                const positions = category === 'scratch' ? scratchPositions : francaisePositions;
                 Object.keys(positions).forEach(key => delete positions[key]);
                 
                 updateStandings();
@@ -734,10 +747,13 @@
             document.getElementById('admin-page').style.display = 'block';
             
             // S'assurer que l'onglet scratch est actif par défaut
-            document.querySelectorAll('#admin-page .tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('#admin-page .tab-content').forEach(c => c.classList.remove('active'));
+            const adminTabs = document.querySelectorAll('#admin-page .tab');
+            const adminContents = document.querySelectorAll('#admin-page .tab-content');
             
-            document.querySelector('#admin-page .tab').classList.add('active');
+            adminTabs.forEach(t => t.classList.remove('active'));
+            adminContents.forEach(c => c.classList.remove('active'));
+            
+            adminTabs[0].classList.add('active');
             document.getElementById('admin-scratch-content').classList.add('active');
             
             adminCategory = 'scratch';
@@ -812,7 +828,7 @@
                 updateStandings();
                 
                 // Mettre à jour l'interface d'administration si elle est visible
-                if (document.getElementById('admin-page').style.display === 'block') {
+                if (document.getElementById('admin-page').style.display !== 'none') {
                     updateAdminTeams();
                 }
             } catch (error) {

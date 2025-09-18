@@ -664,8 +664,8 @@
         };
         
         window.showTeamConfig = function(category) {
-            adminCategory = category;
-            document.getElementById('config-category-title').textContent = category === 'scratch' ? 'Scratch' : 'À la Française';
+            adminCategory = category || adminCategory;
+            document.getElementById('config-category-title').textContent = adminCategory === 'scratch' ? 'Scratch' : 'À la Française';
             document.getElementById('config-modal').style.display = 'block';
             updateTeamsList();
         };

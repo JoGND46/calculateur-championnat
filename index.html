@@ -342,12 +342,32 @@
             padding: 30px;
         }
         
-        /* Verrouillage */
+        /* Verrouillage ciblé - seulement les contrôles de modification */
         .page-locked .position-select,
         .page-locked .btn {
             pointer-events: none !important;
             opacity: 0.5;
             cursor: not-allowed;
+        }
+        
+        /* Les onglets restent accessibles même verrouillé */
+        .page-locked .tab {
+            pointer-events: auto !important;
+            opacity: 1 !important;
+            cursor: pointer !important;
+        }
+        
+        /* Le classement live reste parfaitement visible */
+        .page-locked .section,
+        .page-locked .standings-row,
+        .page-locked .live-rank,
+        .page-locked .team-name,
+        .page-locked .team-points,
+        .page-locked .evolution,
+        .page-locked .points-grid,
+        .page-locked .point-item {
+            pointer-events: auto !important;
+            opacity: 1 !important;
         }
         
         /* Modal */

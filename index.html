@@ -1047,8 +1047,19 @@
             }
         }
         
+        // Rafraîchissement automatique toutes les minutes
+        function startAutoRefresh() {
+            setInterval(async () => {
+                console.log('Rafraîchissement automatique des données...');
+                await loadData();
+            }, 60000); // 60 secondes = 1 minute
+        }
+        
         // Initialiser
         init();
+        
+        // Démarrer le rafraîchissement automatique
+        startAutoRefresh();
     </script>
 </body>
 </html>

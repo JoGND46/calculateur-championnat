@@ -1,4 +1,708 @@
-<!DOCTYPE html>
+// Fermer le modal en cliquant à l'extérieur
+        window.onclick = function(event) {
+            const modal = document.getElementById('config-modal');
+            if (event.target === modal) {
+                hideTeamConfig();
+            }
+        }
+        
+        // Gestion des touches clavier
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                hideTeamConfig();
+            }
+        });
+        
+        // Initialiser l'interface utilisateur au chargement
+        function initializeLockUI() {
+            updateLockUI();
+        }
+        
+        // Initialiser l'application
+        function initializeApp() {
+            createPointsGrids();
+            loadFallbackConfig();
+            updateDisplay('scratch');
+            updateDisplay('francaise');
+            initializeLockUI();
+            
+            // Connexion automatique à Supabase
+            initializeSupabase();
+        }
+        
+        // Initialiser l'application
+        initializeApp();
+    </script>
+</body>
+</html> Charger les données par défaut si aucune équipe
+                    await initializeDefaultData();
+                }
+                
+                // Charger les positions de course
+                const { data: positions, error: positionsError } = await supabase
+                    .from('race_positions')
+                    .select('*');
+                
+                if (positionsError) throw positionsError;
+                
+                if (positions) {
+                    scratchRacePositions = {};
+                    francaiseRacePositions = {};
+                    
+                    positions.forEach(pos => {
+                        if (pos.category === 'scratch') {
+                            scratchRacePositions[pos.team_number] = pos.position;
+                        } else if (pos.category === 'francaise') {
+                            francaiseRacePositions[pos.team_number] = pos.position;
+                        }
+                    });
+                }
+                
+                updateDisplay('scratch');
+                updateDisplay('francaise');
+                
+            } catch (error) {
+                console.error('Erreur lors du chargement:', error);
+            }
+        }
+        
+        // Initialiser les données par défaut dans Supabase
+        async function initializeDefaultData() {
+            try {
+                const scratchData = DEFAULT_TEAMS.map(team => ({...team, category: 'scratch'}));
+                const francaiseData = DEFAULT_TEAMS.map(team => ({...team, category: 'francaise'}));
+                
+                const { error } = await supabase
+                    .from('teams')
+                    .insert([...scratchData, ...francaiseData]);
+                
+                if (error) throw error;
+                
+                scratchTeams = scratchData;
+                francaiseTeams = francaiseData;
+                
+            } catch (error) {
+                console.error('Erreur lors de l\'initialisation:', error);
+            }
+        }
+        
+        // Configurer les listeners temps réel
+        function setupRealtimeListeners() {
+            // Écouter les changements sur les équipes
+            supabase
+                .channel('teams-changes')
+                .on('postgres_changes', 
+                    { event: '*', schema: 'public', table: 'teams' },
+                    async (payload) => {
+                        console.log('Changement détecté:', payload);
+                        await loadDataFromSupabase();
+                    }
+                )
+                .subscribe();
+            
+            // Écouter les changements sur les positions
+            supabase
+                .channel('positions-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'race_positions' },
+                    async (payload) => {
+                        console.log('Position mise à jour:', payload);
+                        await loadDataFromSupabase();
+                    }
+                )
+                .subscribe();
+        }
+        
+        // Sauvegarder les équipes dans Supabase
+        async function saveTeamsToSupabase(category) {
+            console.log('Tentative de sauvegarde pour:', category);
+            console.log('isConnected:', isConnected);
+            
+            if (!isConnected) {
+                console.log('Pas connecté à Supabase, sauvegarde locale uniquement');
+                // Sauvegarder en local comme fallback
+                localStorage.setItem(category + 'TeamsConfig', JSON.stringify(category === 'scratch' ? scratchTeams : francaiseTeams));
+                return;
+            }
+            
+            try {
+                const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+                console.log('Équipes à sauvegarder:', teams);
+                
+                // Supprimer les anciennes équipes de cette catégorie
+                console.log('Suppression des anciennes équipes...');
+                const deleteResult = await supabase
+                    .from('teams')
+                    .delete()
+                    .eq('category', category);
+                
+                console.log('Résultat suppression:', deleteResult);
+                
+                // Insérer les nouvelles équipes
+                if (teams.length > 0) {
+                    const teamsWithCategory = teams.map(team => ({
+                        number: team.number,
+                        name: team.name,
+                        currentpoints: team.currentPoints,
+                        isourteam: team.isOurTeam,
+                        category: category
+                    }));
+                    
+                    console.log('Données à insérer:', teamsWithCategory);
+                    
+                    const insertResult = await supabase
+                        .from('teams')
+                        .insert(teamsWithCategory);
+                    
+                    console.log('Résultat insertion:', insertResult);
+                    
+                    if (insertResult.error) {
+                        throw insertResult.error;
+                    }
+                }
+                
+                console.log('Sauvegarde réussie');
+                
+            } catch (error) {
+                console.error('Erreur détaillée lors de la sauvegarde:', error);
+                alert('Erreur lors de la sauvegarde des équipes: ' + error.message);
+            }
+        }
+        
+        // Sauvegarder une position de course dans Supabase
+        async function savePositionToSupabase(category, teamNumber, position) {
+            if (!isConnected) return;
+            
+            try {
+                if (position === null || position === '') {
+                    // Supprimer la position
+                    await supabase
+                        .from('race_positions')
+                        .delete()
+                        .eq('category', category)
+                        .eq('team_number', teamNumber);
+                } else {
+                    // Insérer ou mettre à jour la position
+                    const { error } = await supabase
+                        .from('race_positions')
+                        .upsert({
+                            category: category,
+                            team_number: teamNumber,
+                            position: parseInt(position)
+                        });
+                    
+                    if (error) throw error;
+                }
+                
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde de position:', error);
+            }
+        }
+        
+        // Charger la configuration de secours (localStorage)
+        function loadFallbackConfig() {
+            const scratchSaved = localStorage.getItem('scratchTeamsConfig');
+            const francaiseSaved = localStorage.getItem('francaiseTeamsConfig');
+            
+            if (!isConnected) {
+                if (scratchSaved) {
+                    scratchTeams = JSON.parse(scratchSaved);
+                } else {
+                    scratchTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                }
+                
+                if (francaiseSaved) {
+                    francaiseTeams = JSON.parse(francaiseSaved);
+                } else {
+                    francaiseTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                }
+            }
+        }
+        
+        // Changer d'onglet
+        function switchTab(category) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(category + '-content').classList.add('active');
+            
+            currentCategory = category;
+        }
+        
+        // Créer les grilles de points
+        function createPointsGrids() {
+            createPointsGrid('scratch', scratchPointsScale);
+            createPointsGrid('francaise', francaisePointsScale);
+        }
+        
+        function createPointsGrid(category, pointsScale) {
+            const container = document.getElementById(category + '-points-grid');
+            container.innerHTML = '';
+            
+            pointsScale.forEach((points, index) => {
+                const position = index + 1;
+                const item = document.createElement('div');
+                item.className = 'point-item';
+                item.innerHTML = `
+                    <div class="point-position">${position}e</div>
+                    <div class="point-value">${points}pts</div>
+                `;
+                container.appendChild(item);
+            });
+            
+            // Ajouter "Hors des points"
+            const horsPoints = document.createElement('div');
+            horsPoints.className = 'point-item';
+            horsPoints.style.border = '2px solid #dc3545';
+            horsPoints.innerHTML = `
+                <div class="point-position" style="color: #dc3545;">Hors des points</div>
+                <div class="point-value" style="color: #dc3545;">0pts</div>
+            `;
+            container.appendChild(horsPoints);
+        }
+        
+        // Afficher la configuration
+        function showTeamConfig(category) {
+            if (isLocked) {
+                alert('Page verrouillée. Déverrouillez d\'abord pour effectuer des modifications.');
+                return;
+            }
+            
+            currentCategory = category;
+            cancelEdit();
+            
+            document.getElementById('modal-title').textContent = 
+                `⚙️ Configuration ${category === 'scratch' ? 'Scratch' : 'À la Française'}`;
+            updateTeamsConfigList();
+            document.getElementById('config-modal').style.display = 'block';
+        }
+        
+        function hideTeamConfig() {
+            cancelEdit();
+            document.getElementById('config-modal').style.display = 'none';
+        }
+        
+        // Ajouter une équipe
+        async function addTeam() {
+            if (isLocked) {
+                alert('Page verrouillée. Déverrouillez d\'abord pour effectuer des modifications.');
+                return;
+            }
+            
+            const number = parseInt(document.getElementById('team-number').value);
+            const points = parseInt(document.getElementById('team-points').value) || 0;
+            
+            if (!number) {
+                alert('Veuillez remplir le numéro de l\'équipe');
+                return;
+            }
+            
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            
+            if (editingTeamIndex >= 0) {
+                // Mode édition
+                const editingTeam = teams[editingTeamIndex];
+                
+                if (editingTeam.number !== number && teams.find(t => t.number === number)) {
+                    alert('Ce numéro d\'équipe existe déjà dans cette catégorie');
+                    return;
+                }
+                
+                const isOurTeam = (number === 15);
+                const name = isOurTeam ? "Team SLT" : `Équipe ${number}`;
+                
+                teams[editingTeamIndex] = {
+                    number: number,
+                    name: name,
+                    currentPoints: points,
+                    isOurTeam: isOurTeam
+                };
+                
+                editingTeamIndex = -1;
+                document.querySelector('.form-row button').textContent = '+ Ajouter';
+                document.querySelector('.form-row button').style.background = 'linear-gradient(135deg, #28a745, #218838)';
+                
+            } else {
+                // Mode ajout normal
+                if (teams.find(t => t.number === number)) {
+                    alert('Ce numéro d\'équipe existe déjà dans cette catégorie');
+                    return;
+                }
+                
+                const isOurTeam = (number === 15);
+                const name = isOurTeam ? "Team SLT" : `Équipe ${number}`;
+                
+                teams.push({
+                    number: number,
+                    name: name,
+                    currentPoints: points,
+                    isOurTeam: isOurTeam
+                });
+            }
+            
+            document.getElementById('team-number').value = '';
+            document.getElementById('team-points').value = '';
+            
+            // Sauvegarder dans Supabase
+            await saveTeamsToSupabase(currentCategory);
+            
+            updateTeamsConfigList();
+        }
+        
+        // Éditer une équipe
+        function editTeam(index) {
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            const team = teams[index];
+            
+            document.getElementById('team-number').value = team.number;
+            document.getElementById('team-points').value = team.currentPoints;
+            
+            editingTeamIndex = index;
+            const button = document.querySelector('.form-row button');
+            button.textContent = '💾 Modifier';
+            button.style.background = 'linear-gradient(135deg, #ffc107, #e0a800)';
+            
+            document.querySelector('.modal-body').scrollTop = 0;
+        }
+        
+        // Annuler l'édition
+        function cancelEdit() {
+            editingTeamIndex = -1;
+            document.getElementById('team-number').value = '';
+            document.getElementById('team-points').value = '';
+            
+            const button = document.querySelector('.form-row button');
+            button.textContent = '+ Ajouter';
+            button.style.background = 'linear-gradient(135deg, #28a745, #218838)';
+        }
+        
+        // Supprimer une équipe
+        async function removeTeam(index) {
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            const racePositions = currentCategory === 'scratch' ? scratchRacePositions : francaiseRacePositions;
+            
+            if (index >= 0 && index < teams.length) {
+                const teamToDelete = teams[index];
+                const teamNumber = teamToDelete.number;
+                
+                // Supprimer la position de course
+                if (racePositions[teamNumber] !== undefined) {
+                    delete racePositions[teamNumber];
+                    await savePositionToSupabase(currentCategory, teamNumber, null);
+                }
+                
+                // Supprimer l'équipe du tableau
+                teams.splice(index, 1);
+                
+                // Gérer l'édition en cours
+                if (editingTeamIndex === index) {
+                    cancelEdit();
+                } else if (editingTeamIndex > index) {
+                    editingTeamIndex--;
+                }
+                
+                // Sauvegarder dans Supabase
+                await saveTeamsToSupabase(currentCategory);
+                
+                updateTeamsConfigList();
+                updateDisplay(currentCategory);
+            }
+        }
+        
+        // Mettre à jour la liste de configuration
+        function updateTeamsConfigList() {
+            const container = document.getElementById('teams-config-list');
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            
+            if (teams.length === 0) {
+                container.innerHTML = '<div class="no-teams">Aucune équipe configurée. Ajoutez des équipes ci-dessus.</div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            teams.forEach((team, index) => {
+                const item = document.createElement('div');
+                item.className = `team-config-item ${team.isOurTeam ? 'team-slt' : ''}`;
+                
+                item.innerHTML = `
+                    <div class="team-number">${team.number}</div>
+                    <div class="team-points">${team.currentPoints}pts</div>
+                    <div>
+                        <button class="edit-btn" onclick="editTeam(${index})" title="Modifier">✏️</button>
+                        <button class="delete-btn" onclick="confirmRemoveTeam(${index})" title="Supprimer">🗑️</button>
+                    </div>
+                `;
+                
+                container.appendChild(item);
+            });
+        }
+        
+        // Charger des données d'exemple
+        async function loadSampleData() {
+            if (confirm('Cela va remplacer toutes les équipes actuelles par les équipes par défaut. Continuer ?')) {
+                if (currentCategory === 'scratch') {
+                    scratchTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                } else {
+                    francaiseTeams = DEFAULT_TEAMS.map(team => ({...team}));
+                }
+                
+                await saveTeamsToSupabase(currentCategory);
+                updateTeamsConfigList();
+            }
+        }
+        
+        // Effacer toutes les équipes
+        async function clearAllTeams() {
+            if (currentCategory === 'scratch') {
+                scratchTeams.length = 0;
+                Object.keys(scratchRacePositions).forEach(async key => {
+                    delete scratchRacePositions[key];
+                    await savePositionToSupabase('scratch', key, null);
+                });
+            } else {
+                francaiseTeams.length = 0;
+                Object.keys(francaiseRacePositions).forEach(async key => {
+                    delete francaiseRacePositions[key];
+                    await savePositionToSupabase('francaise', key, null);
+                });
+            }
+            
+            cancelEdit();
+            await saveTeamsToSupabase(currentCategory);
+            updateTeamsConfigList();
+            updateDisplay(currentCategory);
+        }
+        
+        // Sauvegarder la configuration
+        async function saveConfig() {
+            await saveTeamsToSupabase(currentCategory);
+            updateDisplay(currentCategory);
+            hideTeamConfig();
+            alert('Configuration sauvegardée !');
+        }
+        
+        // Mettre à jour l'affichage
+        function updateDisplay(category) {
+            const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+            
+            if (teams.length === 0) {
+                document.getElementById(category + '-teams-container').innerHTML = 
+                    '<div class="no-teams">Aucune équipe configurée. Cliquez sur "Configurer Équipes".</div>';
+                document.getElementById(category + '-standings-container').innerHTML = 
+                    '<div class="no-teams">Configurez d\'abord les équipes.</div>';
+                return;
+            }
+            
+            createTeamsGrid(category);
+            updateLiveStandings(category);
+        }
+        
+        // Créer la grille des équipes
+        function createTeamsGrid(category) {
+            const container = document.getElementById(category + '-teams-container');
+            const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+            const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
+            
+            container.innerHTML = '';
+            
+            const teamsWithInitialPos = getInitialPositions(teams);
+            
+            teamsWithInitialPos.forEach((team, index) => {
+                const row = document.createElement('div');
+                row.className = `team-row ${team.isOurTeam ? 'team-slt' : ''}`;
+                row.innerHTML = `
+                    <div class="team-number">${team.number}</div>
+                    <div class="team-name">${team.name}</div>
+                    <div class="team-points">${team.currentPoints}pts</div>
+                    <select class="position-select" onchange="updateRacePosition('${category}', ${team.number}, this.value)">
+                        <option value="">-- Position --</option>
+                        <option value="1" ${racePositions[team.number] === 1 ? 'selected' : ''}>1ère (30pts)</option>
+                        <option value="2" ${racePositions[team.number] === 2 ? 'selected' : ''}>2ème (24pts)</option>
+                        <option value="3" ${racePositions[team.number] === 3 ? 'selected' : ''}>3ème (21pts)</option>
+                        <option value="4" ${racePositions[team.number] === 4 ? 'selected' : ''}>4ème (19pts)</option>
+                        <option value="5" ${racePositions[team.number] === 5 ? 'selected' : ''}>5ème (17pts)</option>
+                        <option value="6" ${racePositions[team.number] === 6 ? 'selected' : ''}>6ème (15pts)</option>
+                        <option value="7" ${racePositions[team.number] === 7 ? 'selected' : ''}>7ème (14pts)</option>
+                        <option value="8" ${racePositions[team.number] === 8 ? 'selected' : ''}>8ème (13pts)</option>
+                        <option value="9" ${racePositions[team.number] === 9 ? 'selected' : ''}>9ème (12pts)</option>
+                        <option value="10" ${racePositions[team.number] === 10 ? 'selected' : ''}>10ème (11pts)</option>
+                        <option value="11" ${racePositions[team.number] === 11 ? 'selected' : ''}>11ème (10pts)</option>
+                        <option value="12" ${racePositions[team.number] === 12 ? 'selected' : ''}>12ème (9pts)</option>
+                        <option value="13" ${racePositions[team.number] === 13 ? 'selected' : ''}>13ème (8pts)</option>
+                        <option value="14" ${racePositions[team.number] === 14 ? 'selected' : ''}>14ème (7pts)</option>
+                        <option value="15" ${racePositions[team.number] === 15 ? 'selected' : ''}>15ème (6pts)</option>
+                        <option value="16" ${racePositions[team.number] === 16 ? 'selected' : ''}>16ème (5pts)</option>
+                        <option value="17" ${racePositions[team.number] === 17 ? 'selected' : ''}>17ème (4pts)</option>
+                        <option value="18" ${racePositions[team.number] === 18 ? 'selected' : ''}>18ème (3pts)</option>
+                        <option value="19" ${racePositions[team.number] === 19 ? 'selected' : ''}>19ème (2pts)</option>
+                        <option value="20" ${racePositions[team.number] === 20 ? 'selected' : ''}>20ème (1pt)</option>
+                        <option value="0" ${racePositions[team.number] === 0 ? 'selected' : ''}>Hors des points (0pt)</option>
+                    </select>
+                `;
+                container.appendChild(row);
+            });
+        }
+        
+        // Mettre à jour la position de course
+        async function updateRacePosition(category, teamNumber, position) {
+            if (isLocked) return; // Bloquer si verrouillé
+            
+            const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
+            
+            if (position && position !== '') {
+                racePositions[teamNumber] = parseInt(position);
+            } else {
+                delete racePositions[teamNumber];
+                position = null;
+            }
+            
+            // Sauvegarder dans Supabase
+            await savePositionToSupabase(category, teamNumber, position);
+            
+            updateLiveStandings(category);
+        }
+        
+        // Calculer les positions initiales
+        function getInitialPositions(teams) {
+            return teams
+                .map((team, index) => ({ ...team, originalIndex: index }))
+                .sort((a, b) => b.currentPoints - a.currentPoints)
+                .map((team, index) => ({ ...team, initialPosition: index + 1 }))
+                .sort((a, b) => a.originalIndex - b.originalIndex);
+        }
+        
+        // Calculer les points gagnés
+        function getRacePoints(category, position) {
+            if (!position || position < 0) return 0;
+            if (position === 0) return 0; // Hors des points
+            const pointsScale = category === 'scratch' ? scratchPointsScale : francaisePointsScale;
+            return position <= pointsScale.length ? pointsScale[position - 1] : 0;
+        }
+        
+        // Mettre à jour le classement live
+        function updateLiveStandings(category) {
+            const container = document.getElementById(category + '-standings-container');
+            const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+            const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
+            
+            if (teams.length === 0) {
+                container.innerHTML = '<div class="no-teams">Configurez d\'abord les équipes.</div>';
+                return;
+            }
+            
+            const teamsWithInitialPos = getInitialPositions(teams);
+            
+            // Calculer les totaux et créer le score composite
+            const liveData = teamsWithInitialPos.map(team => {
+                const racePoints = getRacePoints(category, racePositions[team.number]);
+                const totalPoints = team.currentPoints + racePoints;
+                // Score composite pour gérer les égalités
+                const compositeScore = totalPoints + (21 - team.initialPosition) / 100;
+                
+                return {
+                    ...team,
+                    racePoints,
+                    totalPoints,
+                    compositeScore
+                };
+            });
+            
+            // Trier par score composite décroissant
+            const sortedData = liveData.sort((a, b) => b.compositeScore - a.compositeScore);
+            
+            container.innerHTML = '';
+            
+            sortedData.forEach((team, index) => {
+                const liveRank = index + 1;
+                const evolution = calculateEvolution(team.initialPosition, liveRank);
+                
+                const row = document.createElement('div');
+                row.className = `standings-row ${getRankClass(liveRank)} ${team.isOurTeam ? 'team-slt' : ''}`;
+                
+                row.innerHTML = `
+                    <div class="live-rank ${getRankClass(liveRank)}">${liveRank}</div>
+                    <div class="live-team">#${team.number} ${team.name}</div>
+                    <div class="live-points">${team.totalPoints}pts</div>
+                    <div class="evolution ${getEvolutionClass(evolution)}">${evolution}</div>
+                `;
+                
+                container.appendChild(row);
+            });
+        }
+        
+        // Calculer l'évolution
+        function calculateEvolution(initialPos, currentPos) {
+            if (initialPos > currentPos) {
+                return `↗${initialPos - currentPos}`;
+            } else if (initialPos < currentPos) {
+                return `↘${currentPos - initialPos}`;
+            } else {
+                return '=';
+            }
+        }
+        
+        // Obtenir la classe de rang
+        function getRankClass(rank) {
+            if (rank === 1) return 'rank-1';
+            if (rank === 2) return 'rank-2';
+            if (rank === 3) return 'rank-3';
+            return '';
+        }
+        
+        // Obtenir la classe d'évolution
+        function getEvolutionClass(evolution) {
+            if (evolution.startsWith('↗')) return 'evolution-up';
+            if (evolution.startsWith('↘')) return 'evolution-down';
+            return 'evolution-same';
+        }
+        
+        // Reset de la course
+        async function resetRace(category) {
+            if (isLocked) {
+                alert('Page verrouillée. Déverrouillez d\'abord pour effectuer des modifications.');
+                return;
+            }
+            
+            const racePositions = category === 'scratch' ? scratchRacePositions : francaiseRacePositions;
+            
+            // Reset des positions
+            const teamNumbers = Object.keys(racePositions);
+            for (const teamNumber of teamNumbers) {
+                delete racePositions[teamNumber];
+                await savePositionToSupabase(category, teamNumber, null);
+            }
+            
+            // Reset des selects
+            const selects = document.querySelectorAll(`#${category}-teams-container .position-select`);
+            selects.forEach((select) => {
+                select.selectedIndex = 0;
+            });
+            
+            updateLiveStandings(category);
+        }
+        
+        // Fonctions de confirmation
+        function confirmRemoveTeam(index) {
+            const teams = currentCategory === 'scratch' ? scratchTeams : francaiseTeams;
+            
+            if (index >= 0 && index < teams.length) {
+                const team = teams[index];
+                if (window.confirm(`Supprimer l'équipe ${team.number} - ${team.name} ?`)) {
+                    removeTeam(index);
+                }
+            }
+        }
+        
+        function confirmResetRace(category) {
+            const categoryName = category === 'scratch' ? 'Scratch' : 'À la Française';
+            if (window.confirm(`Remettre à zéro toutes les positions ${categoryName} ?`)) {
+                resetRace(category);
+            }
+        }
+        
+        //<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -28,37 +732,6 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            position: relative;
-        }
-        
-        .lock-button {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            border: 2px solid #FFD700;
-            color: #000;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 1.2em;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(255,215,0,0.3);
-        }
-        
-        .lock-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 15px rgba(255,215,0,0.5);
-        }
-        
-        .lock-button.locked {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-            border-color: #dc3545;
-            color: white;
         }
         
         .logo-container {
@@ -111,6 +784,66 @@
         
         .status.disconnected {
             color: #dc3545;
+        }
+        
+        .lock-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 200;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .lock-button.locked {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .lock-button.unlocked {
+            background: linear-gradient(135deg, #28a745, #218838);
+            color: white;
+        }
+        
+        .lock-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+        
+        /* Verrouillage ciblé - seulement les contrôles de modification */
+        .page-locked .position-select {
+            pointer-events: none !important;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .page-locked .btn {
+            pointer-events: none !important;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .page-locked .modal {
+            pointer-events: none !important;
+        }
+        
+        /* Le classement live reste parfaitement visible et accessible */
+        .page-locked .live-standings,
+        .page-locked .standings-row,
+        .page-locked .live-rank,
+        .page-locked .live-team,
+        .page-locked .live-points,
+        .page-locked .evolution,
+        .page-locked .points-grid,
+        .page-locked .point-item {
+            pointer-events: auto !important;
+            opacity: 1 !important;
         }
         
         .container {
@@ -378,7 +1111,7 @@
             color: white;
         }
         
-        /* Couleurs spÃ©ciales */
+        /* Couleurs spéciales */
         .rank-1 {
             background: linear-gradient(135deg, #FFD700, #FFA500) !important;
             color: #000 !important;
@@ -542,161 +1275,15 @@
             font-size: 0.8em;
         }
         
-        .config-section {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .config-section h4 {
-            color: #856404;
-            margin-bottom: 10px;
-        }
-        
-        .config-input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-bottom: 10px;
-        }
-        
-        /* État verrouillé - grise les éléments */
-        body.locked .position-select {
-            background-color: #f8f9fa !important;
-            color: #6c757d !important;
-            border-color: #dee2e6 !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .btn {
-            background: #6c757d !important;
-            color: white !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .tab {
-            background: #e9ecef !important;
-            color: #6c757d !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .tab.active {
-            background: #dee2e6 !important;
-            color: #6c757d !important;
-        }
-        
-        body.locked .config-input {
-            background-color: #f8f9fa !important;
-            color: #6c757d !important;
-            border-color: #dee2e6 !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .form-row input {
-            background-color: #f8f9fa !important;
-            color: #6c757d !important;
-            border-color: #dee2e6 !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .form-row button {
-            background: #6c757d !important;
-            color: white !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        body.locked .delete-btn,
-        body.locked .edit-btn {
-            background: #6c757d !important;
-            color: white !important;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-        
-        /* Modal pour code de déverrouillage */
-        .unlock-modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.7);
-        }
-        
-        .unlock-modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 0;
-            border-radius: 15px;
-            width: 300px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        
-        .unlock-modal-header {
-            background: linear-gradient(135deg, #000 0%, #333 100%);
-            color: #FFD700;
-            padding: 20px;
-            border-radius: 15px 15px 0 0;
-        }
-        
-        .unlock-modal-body {
-            padding: 30px 20px;
-        }
-        
-        .unlock-input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #059abb;
-            border-radius: 8px;
-            font-size: 1.2em;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        .unlock-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-        
-        .unlock-btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .unlock-btn.confirm {
-            background: linear-gradient(135deg, #28a745, #218838);
-            color: white;
-        }
-        
-        .unlock-btn.cancel {
-            background: linear-gradient(135deg, #6c757d, #5a6268);
-            color: white;
-        }
-        
-        .unlock-error {
-            color: #dc3545;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        
         @media (max-width: 768px) {
+            .lock-button {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+                top: 15px;
+                right: 15px;
+            }
+            
             .teams-section {
                 grid-template-columns: 1fr;
             }
@@ -729,9 +1316,6 @@
 </head>
 <body>
     <div class="header">
-        <button class="lock-button" id="lock-btn" onclick="toggleLock()" title="Verrouiller/Déverrouiller">
-            🔓
-        </button>
         <div class="logo-container">
             <div class="logo">SLT</div>
             <div>
@@ -741,6 +1325,11 @@
             </div>
         </div>
     </div>
+    
+    <!-- Bouton de verrouillage -->
+    <button id="lock-button" class="lock-button locked" onclick="toggleLock()" title="Cliquez pour déverrouiller">
+        🔒
+    </button>
     
     <div class="container">        
         <!-- Onglets -->
@@ -758,7 +1347,7 @@
                 </div>
                 
                 <div class="teams-input">
-                    <div class="section-header">🎵 Saisie Positions - Scratch</div>
+                    <div class="section-header">🏍️ Saisie Positions - Scratch</div>
                     <div class="teams-container" id="scratch-teams-container"></div>
                 </div>
             </div>
@@ -782,7 +1371,7 @@
                 </div>
                 
                 <div class="teams-input">
-                    <div class="section-header">🎵 Saisie Positions - À la Française</div>
+                    <div class="section-header">🏍️ Saisie Positions - À la Française</div>
                     <div class="teams-container" id="francaise-teams-container"></div>
                 </div>
             </div>
@@ -823,37 +1412,16 @@
         </div>
     </div>
     
-    <!-- Modal de déverrouillage -->
-    <div id="unlock-modal" class="unlock-modal">
-        <div class="unlock-modal-content">
-            <div class="unlock-modal-header">
-                <h3>🔒 Déverrouillage requis</h3>
-            </div>
-            <div class="unlock-modal-body">
-                <p>Entrez le code pour déverrouiller :</p>
-                <input type="password" id="unlock-code" class="unlock-input" placeholder="Code d'accès" maxlength="6">
-                <div class="unlock-buttons">
-                    <button class="unlock-btn confirm" onclick="checkUnlockCode()">Déverrouiller</button>
-                    <button class="unlock-btn cancel" onclick="hideUnlockModal()">Annuler</button>
-                </div>
-                <div id="unlock-error" class="unlock-error" style="display: none;"></div>
-            </div>
-        </div>
-    </div>
-    
     <script>
         // Variables Supabase - Configuration automatique
         const SUPABASE_URL = 'https://docxadnjpawkpcmdesra.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvY3hhZG5qcGF3a3BjbWRlc3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxMjkyMzEsImV4cCI6MjA3MzcwNTIzMX0.bsI9rALIMR3mMg_uF_jQwPha4syVJ7JOt7LmZ4Ox9e8';
         let supabase = null;
         let isConnected = false;
+        let isLocked = true; // Page verrouillée par défaut
         
-        // Configuration par défaut - Quelques équipes d'exemple
-        const DEFAULT_TEAMS = [
-            { number: 15, name: "Team SLT", currentPoints: 0, isOurTeam: true },
-            { number: 1, name: "Équipe 1", currentPoints: 0, isOurTeam: false },
-            { number: 2, name: "Équipe 2", currentPoints: 0, isOurTeam: false }
-        ];
+        // Configuration par défaut - Vide au démarrage
+        const DEFAULT_TEAMS = [];
         
         // Variables de l'application
         let scratchTeams = [];
@@ -862,8 +1430,6 @@
         let francaiseRacePositions = {};
         let currentCategory = 'scratch';
         let editingTeamIndex = -1;
-        let isLocked = false;
-        const UNLOCK_CODE = '142693';
         
         // Barèmes de points
         const scratchPointsScale = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -872,21 +1438,10 @@
         // Connexion automatique à Supabase
         async function initializeSupabase() {
             try {
-                // Créer le client Supabase seulement si les variables sont définies
-                if (!SUPABASE_URL || !SUPABASE_KEY) {
-                    throw new Error('Configuration Supabase manquante');
-                }
-                
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
-                // Test de connexion avec timeout
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout de connexion')), 5000)
-                );
-                
-                const testPromise = supabase.from('teams').select('count').limit(1);
-                
-                const { data, error } = await Promise.race([testPromise, timeoutPromise]);
+                // Test de connexion
+                const { data, error } = await supabase.from('teams').select('count').limit(1);
                 
                 if (error) {
                     throw error;
@@ -898,17 +1453,130 @@
                 // Charger les données
                 await loadDataFromSupabase();
                 
+                // Charger l'état de verrouillage
+                await loadLockState();
+                
                 // Écouter les changements temps réel
                 setupRealtimeListeners();
+                setupLockRealtimeListener();
                 
             } catch (error) {
-                console.warn('Connexion Supabase échouée:', error.message);
-                isConnected = false;
-                updateConnectionStatus('Mode local (sans synchronisation)', 'disconnected');
-                
-                // Continuer avec le mode local
+                console.error('Erreur de connexion Supabase:', error);
+                updateConnectionStatus('Mode hors ligne (localStorage)', 'disconnected');
                 loadFallbackConfig();
-                updateDisplay('scratch');
-                updateDisplay('francaise');
             }
         }
+        
+        // Charger l'état de verrouillage depuis Supabase
+        async function loadLockState() {
+            if (!isConnected) return;
+            
+            try {
+                const { data, error } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'is_locked')
+                    .limit(1);
+                
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    isLocked = data[0].value === 'true';
+                } else {
+                    // Créer l'entrée si elle n'existe pas
+                    await saveLockState();
+                }
+                
+                updateLockUI();
+                
+            } catch (error) {
+                console.error('Erreur lors du chargement de l\'état de verrouillage:', error);
+            }
+        }
+        
+        // Sauvegarder l'état de verrouillage dans Supabase
+        async function saveLockState() {
+            if (!isConnected) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('app_settings')
+                    .upsert({
+                        key: 'is_locked',
+                        value: isLocked.toString(),
+                        updated_at: new Date().toISOString()
+                    });
+                
+                if (error) throw error;
+                
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde de l\'état de verrouillage:', error);
+            }
+        }
+        
+        // Basculer l'état de verrouillage
+        async function toggleLock() {
+            if (isLocked) {
+                // Demander le code pour déverrouiller
+                const code = prompt('Entrez le code de déverrouillage :');
+                if (code !== '142693') {
+                    alert('Code incorrect !');
+                    return;
+                }
+            }
+            
+            isLocked = !isLocked;
+            await saveLockState();
+            updateLockUI();
+        }
+        
+        // Mettre à jour l'interface utilisateur selon l'état de verrouillage
+        function updateLockUI() {
+            const lockButton = document.getElementById('lock-button');
+            const container = document.querySelector('.container');
+            
+            if (isLocked) {
+                lockButton.textContent = '🔒';
+                lockButton.className = 'lock-button locked';
+                lockButton.title = 'Page verrouillée - Cliquez pour déverrouiller';
+                container.classList.add('page-locked');
+            } else {
+                lockButton.textContent = '🔓';
+                lockButton.className = 'lock-button unlocked';
+                lockButton.title = 'Page déverrouillée - Cliquez pour verrouiller';
+                container.classList.remove('page-locked');
+            }
+        }
+        
+        // Configurer les listeners temps réel pour le verrouillage
+        function setupLockRealtimeListener() {
+            if (!isConnected) return;
+            
+            supabase
+                .channel('lock-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.is_locked' },
+                    async (payload) => {
+                        console.log('État de verrouillage mis à jour:', payload);
+                        await loadLockState();
+                    }
+                )
+                .subscribe();
+        }
+        
+        // Mettre à jour le statut de connexion
+        function updateConnectionStatus(message, type) {
+            const status = document.getElementById('connection-status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        // Charger les données depuis Supabase
+        async function loadDataFromSupabase() {
+            try {
+                // Charger les équipes
+                const { data: teams, error: teamsError } = await supabase
+                    .from('teams')
+                    .select('*');
+                
+                if

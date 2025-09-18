@@ -736,13 +736,37 @@
             }
         };
         
-        window.resetPositions = function(category) {
+        window.resetPositions = async function(category) {
             if (confirm(`Remettre à zéro toutes les positions ${category === 'scratch' ? 'Scratch' : 'À la Française'} ?`)) {
+                console.log(`Reset positions pour catégorie: ${category}`);
+                
+                // Effacer localement
                 const positions = category === 'scratch' ? scratchPositions : francaisePositions;
                 Object.keys(positions).forEach(key => delete positions[key]);
                 
+                // Effacer dans la base de données Supabase
+                if (isConnected) {
+                    try {
+                        console.log(`Suppression de toutes les positions ${category} en base...`);
+                        const { data, error } = await supabase
+                            .from('race_positions')
+                            .delete()
+                            .eq('category', category);
+                        
+                        if (error) {
+                            console.error('Erreur suppression positions:', error);
+                            alert('Erreur lors de la suppression des positions en base de données');
+                        } else {
+                            console.log('Positions supprimées avec succès de la base:', data);
+                        }
+                    } catch (error) {
+                        console.error('Erreur lors du reset en base:', error);
+                    }
+                }
+                
                 updateStandings();
                 updateAdminTeams();
+                console.log(`Reset terminé pour ${category}`);
             }
         };
         

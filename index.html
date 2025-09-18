@@ -732,6 +732,15 @@
         function showAdminPage() {
             document.getElementById('public-page').style.display = 'none';
             document.getElementById('admin-page').style.display = 'block';
+            
+            // S'assurer que l'onglet scratch est actif par défaut
+            document.querySelectorAll('#admin-page .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#admin-page .tab-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelector('#admin-page .tab').classList.add('active');
+            document.getElementById('admin-scratch-content').classList.add('active');
+            
+            adminCategory = 'scratch';
             updateAdminTeams();
         }
         
@@ -801,6 +810,11 @@
                 }
                 
                 updateStandings();
+                
+                // Mettre à jour l'interface d'administration si elle est visible
+                if (document.getElementById('admin-page').style.display === 'block') {
+                    updateAdminTeams();
+                }
             } catch (error) {
                 console.error('Erreur chargement:', error);
             }
@@ -874,8 +888,15 @@
             const positions = category === 'scratch' ? scratchPositions : francaisePositions;
             const container = document.getElementById('admin-' + category + '-teams');
             
+            console.log(`Mise à jour admin ${category}:`, teams.length, 'équipes');
+            
+            if (!container) {
+                console.error('Conteneur admin non trouvé:', 'admin-' + category + '-teams');
+                return;
+            }
+            
             if (teams.length === 0) {
-                container.innerHTML = '<div class="no-teams">Aucune équipe configurée</div>';
+                container.innerHTML = '<div class="no-teams">Aucune équipe configurée<br><button onclick="showTeamConfig(\'' + category + '\')" style="margin-top: 10px; padding: 10px 20px; background: #059abb; color: white; border: none; border-radius: 5px; cursor: pointer;">Ajouter des équipes</button></div>';
                 return;
             }
             

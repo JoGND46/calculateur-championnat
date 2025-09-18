@@ -516,22 +516,46 @@
             
             <h2 style="text-align: center; margin-bottom: 20px; color: white;">Zone Administration</h2>
             
-            <div class="admin-section">
-                <div class="team-input-section">
-                    <div class="section-header">🏍️ Saisie Positions - <span id="admin-category">Scratch</span></div>
-                    <div class="team-input-content" id="admin-teams"></div>
+            <!-- Onglets Administration -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchAdminTab('scratch')">🏆 Configuration Scratch</button>
+                <button class="tab" onclick="switchAdminTab('francaise')">🇫🇷 Configuration À la Française</button>
+            </div>
+            
+            <!-- Contenu Administration Scratch -->
+            <div id="admin-scratch-content" class="tab-content active">
+                <div class="admin-section">
+                    <div class="team-input-section">
+                        <div class="section-header">🏍️ Saisie Positions - Scratch</div>
+                        <div class="team-input-content" id="admin-scratch-teams"></div>
+                    </div>
+                    
+                    <div class="team-input-section">
+                        <div class="section-header">⚙️ Actions Scratch</div>
+                        <div style="padding: 20px; text-align: center;">
+                            <button class="config-btn" onclick="showTeamConfig('scratch')">👥 Configurer Équipes</button>
+                            <br><br>
+                            <button class="config-btn" onclick="resetPositions('scratch')">🔄 Reset Positions</button>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="team-input-section">
-                    <div class="section-header">⚙️ Actions</div>
-                    <div style="padding: 20px; text-align: center;">
-                        <button class="config-btn" onclick="showTeamConfig()">👥 Configurer Équipes</button>
-                        <button class="config-btn" onclick="resetPositions()">🔄 Reset Positions</button>
-                        <br><br>
-                        <select id="admin-category-select" onchange="switchAdminCategory()" style="padding: 10px; border-radius: 5px; margin-bottom: 20px;">
-                            <option value="scratch">Scratch</option>
-                            <option value="francaise">À la Française</option>
-                        </select>
+            </div>
+            
+            <!-- Contenu Administration Française -->
+            <div id="admin-francaise-content" class="tab-content">
+                <div class="admin-section">
+                    <div class="team-input-section">
+                        <div class="section-header">🏍️ Saisie Positions - À la Française</div>
+                        <div class="team-input-content" id="admin-francaise-teams"></div>
+                    </div>
+                    
+                    <div class="team-input-section">
+                        <div class="section-header">⚙️ Actions À la Française</div>
+                        <div style="padding: 20px; text-align: center;">
+                            <button class="config-btn" onclick="showTeamConfig('francaise')">👥 Configurer Équipes</button>
+                            <br><br>
+                            <button class="config-btn" onclick="resetPositions('francaise')">🔄 Reset Positions</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -840,9 +864,15 @@
         }
         
         function updateAdminTeams() {
-            const teams = adminCategory === 'scratch' ? scratchTeams : francaiseTeams;
-            const positions = adminCategory === 'scratch' ? scratchPositions : francaisePositions;
-            const container = document.getElementById('admin-teams');
+            // Mettre à jour les deux onglets d'administration
+            updateAdminCategory('scratch');
+            updateAdminCategory('francaise');
+        }
+        
+        function updateAdminCategory(category) {
+            const teams = category === 'scratch' ? scratchTeams : francaiseTeams;
+            const positions = category === 'scratch' ? scratchPositions : francaisePositions;
+            const container = document.getElementById('admin-' + category + '-teams');
             
             if (teams.length === 0) {
                 container.innerHTML = '<div class="no-teams">Aucune équipe configurée</div>';
@@ -858,7 +888,7 @@
                     <div class="team-number">${team.number}</div>
                     <div class="team-name">${team.name}</div>
                     <div class="team-points">${team.currentPoints}pts</div>
-                    <select class="position-select" onchange="updatePosition('${adminCategory}', ${team.number}, this.value)">
+                    <select class="position-select" onchange="updatePosition('${category}', ${team.number}, this.value)">
                         <option value="">-- Position --</option>
                         ${Array.from({length: 20}, (_, i) => 
                             `<option value="${i+1}" ${positions[team.number] === i+1 ? 'selected' : ''}>${i+1}${i === 0 ? 'ère' : 'ème'} (${pointsScale[i]}pts)</option>`

@@ -848,8 +848,12 @@
         let supabase = null;
         let isConnected = false;
         
-        // Configuration par défaut - Vide au démarrage
-        const DEFAULT_TEAMS = [];
+        // Configuration par défaut - Quelques équipes d'exemple
+        const DEFAULT_TEAMS = [
+            { number: 15, name: "Team SLT", currentPoints: 0, isOurTeam: true },
+            { number: 1, name: "Équipe 1", currentPoints: 0, isOurTeam: false },
+            { number: 2, name: "Équipe 2", currentPoints: 0, isOurTeam: false }
+        ];
         
         // Variables de l'application
         let scratchTeams = [];
@@ -868,7 +872,43 @@
         // Connexion automatique à Supabase
         async function initializeSupabase() {
             try {
+                // Créer le client Supabase seulement si les variables sont définies
+                if (!SUPABASE_URL || !SUPABASE_KEY) {
+                    throw new Error('Configuration Supabase manquante');
+                }
+                
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
-                // Test de connexion
-                const { data, error } = await supabase.from('teams').select('count').limit(1);
+                // Test de connexion avec timeout
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout de connexion')), 5000)
+                );
+                
+                const testPromise = supabase.from('teams').select('count').limit(1);
+                
+                const { data, error } = await Promise.race([testPromise, timeoutPromise]);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                isConnected = true;
+                updateConnectionStatus('Connecté à Supabase', 'connected');
+                
+                // Charger les données
+                await loadDataFromSupabase();
+                
+                // Écouter les changements temps réel
+                setupRealtimeListeners();
+                
+            } catch (error) {
+                console.warn('Connexion Supabase échouée:', error.message);
+                isConnected = false;
+                updateConnectionStatus('Mode local (sans synchronisation)', 'disconnected');
+                
+                // Continuer avec le mode local
+                loadFallbackConfig();
+                updateDisplay('scratch');
+                updateDisplay('francaise');
+            }
+        }

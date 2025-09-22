@@ -176,7 +176,7 @@
         }
         
         .live-points {
-            color: #059abb;
+            color: #dc3545;
             font-weight: bold;
             text-align: center;
             font-size: 1em;
@@ -195,18 +195,15 @@
         .evolution-same { background: #6c757d; color: white; }
         
         .rank-1 {
-            background: linear-gradient(135deg, #FFD700, #FFA500) !important;
-            color: #000 !important;
+            /* Supprimé - plus de couleur pour les 3 premiers */
         }
         
         .rank-2 {
-            background: linear-gradient(135deg, #C0C0C0, #A8A8A8) !important;
-            color: #000 !important;
+            /* Supprimé - plus de couleur pour les 3 premiers */
         }
         
         .rank-3 {
-            background: linear-gradient(135deg, #CD7F32, #B8860B) !important;
-            color: white !important;
+            /* Supprimé - plus de couleur pour les 3 premiers */
         }
         
         .team-slt {
@@ -219,6 +216,61 @@
         .team-slt .live-rank {
             background: #FFD700 !important;
             color: #000 !important;
+        }
+        
+        /* Barème de points */
+        .points-scale {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(4, auto);
+            gap: 12px;
+            padding: 20px;
+        }
+        
+        .points-row {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 15px 8px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 10px;
+            border: 2px solid #059abb;
+            font-size: 0.95em;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+        
+        .points-row:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .points-row .position {
+            font-weight: bold;
+            color: #333;
+            font-size: 1em;
+            margin-bottom: 5px;
+        }
+        
+        .points-row .points {
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        @media (max-width: 768px) {
+            .points-scale {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+                padding: 15px;
+            }
+            
+            .points-row {
+                padding: 10px 5px;
+                font-size: 0.85em;
+            }
         }
         
         /* Section d'administration */
